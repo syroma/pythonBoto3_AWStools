@@ -26,3 +26,7 @@ By default, the script sends notifications to the same email address listed as t
 ## Schedule
 
 By default, the script checks the website's availability every 5 minutes. You can modify this interval on [line 185](#).
+
+## Note
+
+This was a demo made to explore handling multiple machines but as of now only handles the first machine found with the tag "environment" "production"
