@@ -182,7 +182,7 @@ def monitor_web_application():
             time.sleep(60)  # Adjust the sleep duration based on your specific case
 
 aws_info = production_instances()[0]
-schedule.every(5).seconds.do(monitor_web_application)
+schedule.every(5).minutes.do(monitor_web_application)
 
 while True:
     schedule.run_pending()
