@@ -1,0 +1,17 @@
+2023-12-14T10:36:19.705-0600 [INFO]  Terraform version: 1.5.6
+2023-12-14T10:36:19.706-0600 [DEBUG] using github.com/hashicorp/go-tfe v1.26.0
+2023-12-14T10:36:19.706-0600 [DEBUG] using github.com/hashicorp/hcl/v2 v2.16.2
+2023-12-14T10:36:19.706-0600 [DEBUG] using github.com/hashicorp/terraform-svchost v0.1.0
+2023-12-14T10:36:19.706-0600 [DEBUG] using github.com/zclconf/go-cty v1.12.2
+2023-12-14T10:36:19.706-0600 [INFO]  Go runtime version: go1.20.7
+2023-12-14T10:36:19.706-0600 [INFO]  CLI args: []string{"C:\\ProgramData\\chocolatey\\lib\\terraform\\tools\\terraform.exe", "init"}
+2023-12-14T10:36:19.706-0600 [TRACE] Stdout is a terminal of width 161
+2023-12-14T10:36:19.708-0600 [TRACE] Stderr is a terminal of width 161
+2023-12-14T10:36:19.708-0600 [TRACE] Stdin is a terminal
+2023-12-14T10:36:19.711-0600 [DEBUG] Attempting to open CLI config file: C:\Users\Zool\AppData\Roaming\terraform.rc
+2023-12-14T10:36:19.711-0600 [DEBUG] File doesn't exist, but doesn't need to. Ignoring.
+2023-12-14T10:36:19.711-0600 [INFO]  Loading CLI configuration from C:\Users\Zool\AppData\Roaming\terraform.d\credentials.tfrc.json
+2023-12-14T10:36:19.712-0600 [DEBUG] ignoring non-existing provider search directory terraform.d/plugins
+2023-12-14T10:36:19.712-0600 [DEBUG] ignoring non-existing provider search directory C:\Users\Zool\AppData\Roaming\terraform.d\plugins
+2023-12-14T10:36:19.712-0600 [DEBUG] ignoring non-existing provider search directory C:\Users\Zool\AppData\Roaming\HashiCorp\Terraform\plugins
+2023-12-14T10:36:19.712-0600 [INFO]  CLI command args: []string{"init"}
