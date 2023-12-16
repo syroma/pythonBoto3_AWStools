@@ -101,7 +101,7 @@ resource "aws_key_pair" "ssh-key" {
   public_key = file("${path.module}/ssh-keygen/id_rsa.pub")
 }
 
-resource "aws_instance" "myapp-server" {
+resource "aws_instance" "myapp-server-one" {
   ami           = data.aws_ami.amazon-linux-image.id
   instance_type = var.instance_type
 
@@ -116,6 +116,7 @@ resource "aws_instance" "myapp-server" {
 
   tags = {
     Name = "${var.env_prefix}-server"
+    environment = "production"
   }
 }
 
@@ -134,6 +135,7 @@ resource "aws_instance" "myapp-server-two" {
 
   tags = {
     Name = "${var.env_prefix}-server-two"
+    environment = "production"
   }
 }
 
@@ -151,6 +153,7 @@ resource "aws_instance" "myapp-server-three" {
   user_data = file("entry-script.sh")
 
   tags = {
-    Name = "${var.env_prefix}-server-three"
+    Name = "${var.env_prefix}-server-three",
+    environment = "production"
   }
 }
