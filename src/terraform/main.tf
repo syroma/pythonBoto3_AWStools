@@ -2,6 +2,34 @@ provider "aws" {
   region = "us-east-1"
 }
 
+provider "http" {
+  # Configuration options
+}
+
+data "http" "public_ip" {
+  url = "http://ifconfig.me/ip"
+}
+
+resource "null_resource" "update_public_ip_with_cidr" {
+  triggers = {
+    public_ip = data.http.public_ip.response_body
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+      (Get-Content terraform.tfvars) | ForEach-Object {
+        if ($_ -match '^my_public_ip\s*=\s*"(.*)"') {
+          $_ -replace ('"{0}"' -f $matches[1]), '"${data.http.public_ip.response_body}/${var.subnet_prefix_length}"'
+        } else {
+          $_
+        }
+      } | Set-Content terraform.tfvars
+    EOT
+
+    interpreter = ["PowerShell", "-Command"]
+  }
+}
+
 data "aws_ami" "amazon-linux-image" {
   most_recent = true
   #owners      = ["137112412989"]
@@ -41,7 +69,7 @@ resource "aws_security_group" "myapp-sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip]
+    cidr_blocks = [var.my_public_ip]
   }
 
   ingress {
@@ -92,10 +120,6 @@ resource "aws_route_table_association" "a-rtb-subnet" {
   route_table_id = aws_route_table.myapp-route-table.id
 }
 
-output "path_module" {
-  value = "${path.module}"
-}
-
 resource "aws_key_pair" "ssh-key" {
   key_name   = "server-key"
   public_key = file("${path.module}/ssh-keygen/id_rsa.pub")
@@ -115,7 +139,7 @@ resource "aws_instance" "myapp-server-one" {
   user_data = file("entry-script.sh")
 
   tags = {
-    Name = "${var.env_prefix}-server"
+    Name        = "${var.env_prefix}-server-one"
     environment = "production"
   }
 }
@@ -134,7 +158,7 @@ resource "aws_instance" "myapp-server-two" {
   user_data = file("entry-script.sh")
 
   tags = {
-    Name = "${var.env_prefix}-server-two"
+    Name        = "${var.env_prefix}-server-two"
     environment = "production"
   }
 }
@@ -153,7 +177,8 @@ resource "aws_instance" "myapp-server-three" {
   user_data = file("entry-script.sh")
 
   tags = {
-    Name = "${var.env_prefix}-server-three",
+    Name        = "${var.env_prefix}-server-three",
     environment = "production"
   }
 }
+

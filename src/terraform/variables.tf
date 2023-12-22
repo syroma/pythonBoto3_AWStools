@@ -4,7 +4,11 @@ variable "avail_zone" {}
 variable "env_prefix" {}
 variable "instance_type" {}
 
-variable "my_ip" {}
+variable "my_public_ip" {}
+variable "subnet_prefix_length" {
+  default = "32"
+}
+
 variable "image_name" {}
 
 # variable "key_name" {}

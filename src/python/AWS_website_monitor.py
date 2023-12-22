@@ -6,19 +6,27 @@ import smtplib
 import time
 import schedule
 
-EMAIL_ADDRESS = os.environ.get('EMAIL_ADDRESS')
-EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
+EMAIL_FROM_ADDR = os.environ.get('EMAIL_FROM_ADDR')
+EMAIL_FROM_PWD = os.environ.get('EMAIL_FROM_PWD')
+EMAIL_TO_ADDR = os.environ.get('EMAIL_TO_ADDR')
 AWS_ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY')
 AWS_SECRET_KEY = os.environ.get('AWS_SECRET_KEY')
-ssh_key_file = 'C:/Users/Zool/boogpk.pem'
-aws_info = []
+ssh_key_file = 'C:/Users/Zool/PycharmProjects/pythonBoto3_AWStools/src/terraform/ssh-keygen/id_rsa'
+# ssh_key_file = '../terraform/ssh-keygen/id_rsa'
 
 ec2_client = boto3.client('ec2', aws_access_key_id=AWS_ACCESS_KEY, aws_secret_access_key=AWS_SECRET_KEY, region_name="us-east-1")
+
+# List of commands to execute
+commands_to_run = [
+    'sudo chown -R ec2-user:docker /var/run/docker.sock',
+    'sudo chmod 660 /var/run/docker.sock',
+    'sudo docker run -d -p 8080:80 nginx'
+]
 
 
 def production_instances():
     try:
-        # Describe instances with specific filters
+        # Pull the instance info from AWS
         response = ec2_client.describe_instances(
             Filters=[
                 {'Name': 'instance-state-name', 'Values': ['running', 'stopped']},
@@ -54,60 +62,120 @@ def send_notification(email_msg):
     with smtplib.SMTP('smtp.gmail.com', 587) as smtp:
         smtp.starttls()
         smtp.ehlo()
-        smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        smtp.login(EMAIL_FROM_ADDR, EMAIL_FROM_PWD)
         message = f"Subject: SITE DOWN\n{email_msg}"
-        smtp.sendmail(EMAIL_ADDRESS, EMAIL_ADDRESS, message)
+        # smtp.sendmail(EMAIL_FROM_ADDR, EMAIL_TO_ADDR, message)
+        smtp.sendmail(EMAIL_FROM_ADDR, EMAIL_FROM_ADDR, message)
 
 
-def establish_ssh_connection(public_ip, username, key_filename, retry_attempts=5, retry_interval=20):
+def retrieve_public_ip_after_restart(instance_id):
+    try:
+        # Describe instances with specific filters
+        response = ec2_client.describe_instances(
+            InstanceIds=[instance_id]
+        )
+
+        # Extract information from the response
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                public_ip_address = instance['PublicIpAddress']
+
+                return public_ip_address if public_ip_address else None
+
+    except Exception as e:
+        # Handle exceptions (print or log the error, or take appropriate action)
+        print(f"An error occurred: {e}")
+        return None
+
+
+def check_instance_status(instance_id, max_attempts=60, sleep_interval=10):
+    try:
+        for _ in range(max_attempts):
+            response = ec2_client.describe_instance_status(InstanceIds=[instance_id])
+
+            if 'InstanceStatuses' in response and response['InstanceStatuses']:
+                instance_status = response['InstanceStatuses'][0]
+
+                if 'SystemStatus' in instance_status and 'InstanceStatus' in instance_status:
+                    system_status = instance_status['SystemStatus']['Status']
+                    instance_status = instance_status['InstanceStatus']['Status']
+
+                    if system_status == 'ok' and instance_status == 'ok':
+                        print(f"Instance {instance_id} has 'ok' status.")
+                        return True
+
+            print(f"Instance {instance_id} does not have 'ok' status. Waiting...")
+            time.sleep(sleep_interval)
+
+        print(f"Instance {instance_id} did not have 'ok' status within the specified time.")
+        return False
+
+    except Exception as e:
+        # Handle exceptions (print or log the error, or take appropriate action)
+        print(f"An error occurred: {e}")
+        return None
+
+
+def restart_container(public_ip, username='ec2-user', key_filename=ssh_key_file, commands=commands_to_run):
+    # Establish an SSH connection
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect(public_ip, username=username, key_filename=key_filename)
 
-    for attempt in range(1, retry_attempts + 1):
-        try:
-            print(f"Attempting SSH connection (Attempt {attempt})")
-            ssh.connect(aws_info['public_ip'], username=username, key_filename=key_filename)
-            print("SSH connection established successfully")
-            return ssh
+    # # If the AWS instance is up but the website is unavailable restart docker instance
+    for command in commands:
+        # Execute the command on the remote server
+        stdin, stdout, stderr = ssh.exec_command(command)
 
-        except paramiko.AuthenticationException:
-            print("Authentication failed. Please check your credentials.")
-            return None
+        # Check if stdout has data and print it
+        stdout_data = stdout.read().decode().strip()
+        if stdout_data:
+            print(f"Command output for '{command}': ")
+            print(stdout_data)
 
-        except Exception as e:
-            print(f"Failed to connect: {e}")
-            time.sleep(retry_interval)
+        # Check if stderr has data and print it
+        stderr_data = stderr.read().decode().strip()
+        if stderr_data:
+            print(f"Command error for '{command}': ")
+            print(stderr_data)
 
-    print("Exceeded maximum retry attempts. Unable to establish SSH connection.")
-    return None
-
-
-def restart_container(ssh):
-    print('Restarting the application')
-    command = f'docker run -d -p 8080:80 nginx'
-    stdin, stdout, stderr = ssh.exec_command(command)
-    # print("Command output:")
-    # print(stdout.read().decode())
-    # print("Command error:")
-    # print(stderr.read().decode())
+    # Close the SSH connection
+    ssh.close()
 
 
-def restart_instance(instance_id):
-    # Start the instance
+def restart_instance_and_container(instance_id, instance_state):
+    # print(f'Instance {instance_id} is currently {instance_state} and has an ip address of {public_ip}')
+
+    # Start the AWS instance
     ec2_client.start_instances(InstanceIds=[instance_id])
 
-    # Wait until the instance is running
+    # Wait until the AWS instance is running
     waiter = ec2_client.get_waiter('instance_running')
     waiter.wait(InstanceIds=[instance_id])
-
-    # Continue with your logic after the instance is running
     print(f"Instance {instance_id} has started successfully.")
+
+    # check if instance has an IP address and if so change to running
+    public_ip = retrieve_public_ip_after_restart(instance_id)
+    if public_ip is not None:
+        instance_state = 'running'
+
+    print(f'Instance {instance_id} is currently {instance_state} and has an ip address of {public_ip}')
+
+    # wait until AWS status is passed
+    instance_is_up = check_instance_status(instance_id)
+
+    # If the AWS instance is up but the website is unavailable restart docker instance
+    if instance_is_up:
+        # Restart the Docker container
+        restart_container(public_ip)
+
+    return instance_id, instance_state, public_ip
 
 
 def is_website_accessible(url, retry_attempts=5, retry_interval=20):
     for attempt in range(1, retry_attempts + 1):
+        response = requests.get(url)
         try:
-            response = requests.get(url)
             if response.status_code == 200:
                 print("Application is running successfully!")
                 return True
@@ -120,69 +188,44 @@ def is_website_accessible(url, retry_attempts=5, retry_interval=20):
     print("Exceeded maximum retry attempts. Website is not accessible.")
     return False
 
+# ------- *MAIN* ---------#########################################
+
 
 def monitor_web_application():
-    try:
-        # Retrieve InstanceId, and PublicIpAddress
-        aws_info = production_instances()[0]
-        print(aws_info)
+    # Retrieve Instances information and isee if anything is wrong
+    global aws_info
+    aws_info = production_instances()
 
-        # If instance is stopped restart it
-        if aws_info['instance_state'] == 'stopped':
-            restart_instance(aws_info['instance_id'])
+    # iterate through each instance
+    for aws_instance in aws_info:
+        instance_id = aws_instance.get('instance_id')
+        instance_state = aws_instance.get('instance_state')
+        public_ip = aws_instance.get('public_ip')
 
-        # Establish SSH connection
-        ssh = establish_ssh_connection(aws_info['public_ip'], 'ec2-user', ssh_key_file)
+        try:
+            # If we cannot access the website restart the container
+            response = requests.get(f"http://{public_ip}:8080")
+            if response.status_code == 200:
+                print("Application is running successfully!")
+            else:
+                restart_container(public_ip)
+                message = f'Application response {response.status_code}'
+                send_notification(message)
+        except Exception as ex:
+            print(f'Connection error happened: {ex}')
+            message = 'Application not accessible at all.'
+            send_notification(message)
 
-        # If server instance is up but website is unavailable restart docker instance
-        if ssh is not None and aws_info['instance_state'] == 'running':
-            # Restart the Docker container
-            restart_container(ssh)
-
-            # Wait for the website to be accessible
-            website_url = f"http://{aws_info['public_ip']}:8080"
-            if is_website_accessible(website_url):
-                print('Operation completed')
-        ssh.close()
+            # Restart AWS server
+            print('Restarting the server...')
+            instance_id, instance_state, public_ip= restart_instance_and_container(instance_id, instance_state)
+            if instance_state == 'running' and public_ip is not None:
+                print(f'Instance {instance_id} is currently {instance_state} and has an ip address of {public_ip}')
 
 
-    except Exception as ex:
-        print(f'Connection error happened: {ex}')
-        msg = 'Application not accessible at all.'
-        send_notification(msg)
-
-        # Restart AWS server
-        print('Restarting the server...')
-        response = ec2_client.reboot_instances(InstanceIds=[aws_info['instance_id']])
-
-        # Wait for the server to be running again
-        while True:
-            # state_response = ec2_client.describe_instances(InstanceIds=[aws_info['instance_id']])
-            # inst_state = state_response['Reservations'][0]['Instances'][0]['State']['Name']
-            aws_info = production_instances()[0]
-
-            if aws_info['instance_state'] == 'stopped':
-                restart_instance(aws_info['instance_id'])
-
-            print(aws_info['instance_state'])
-            if aws_info['instance_state'] == 'running':
-                # Establish SSH connection again
-                ssh = establish_ssh_connection(aws_info['public_ip'], 'ec2-user', ssh_key_file)
-                print(aws_info['public_ip'])
-
-                if ssh is not None:
-                    # Restart the Docker container
-                    restart_container(ssh)
-
-                    # Close the SSH connection
-                    ssh.close()
-
-                    break  # Exit the loop once the container is restarted
-
-            time.sleep(60)  # Adjust the sleep duration based on your specific case
-
-aws_info = production_instances()[0]
-schedule.every(5).minutes.do(monitor_web_application)
+aws_info = production_instances()
+schedule.every(10).seconds.do(monitor_web_application)
 
 while True:
     schedule.run_pending()
+    time.sleep(1)
