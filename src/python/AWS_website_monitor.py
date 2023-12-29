@@ -5,7 +5,6 @@ import requests
 import smtplib
 import time
 import schedule
-import docker
 import base64
 
 EMAIL_FROM_ADDR = os.environ.get('EMAIL_FROM_ADDR')
@@ -13,9 +12,12 @@ EMAIL_FROM_PWD = os.environ.get('EMAIL_FROM_PWD')
 EMAIL_TO_ADDR = os.environ.get('EMAIL_TO_ADDR')
 AWS_ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY')
 AWS_SECRET_KEY = os.environ.get('AWS_SECRET_KEY')
-# ssh_key_file = 'C:/Users/Zool/PycharmProjects/pythonBoto3_AWStools/src/terraform/ssh-keygen/id_rsa'
-ssh_key_file = '../terraform/ssh-keygen/id_rsa'
+ssh_key_file = 'C:/Users/Zool/PycharmProjects/pythonBoto3_AWStools/src/terraform/ssh-keygen/id_rsa'
+# ssh_key_file = '../terraform/ssh-keygen/id_rsa'
 tag_to_filter_on = 'production'
+
+# base_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+# ssh_keygen_folder = os.path.join(base_directory, 'src', 'terraform', 'ssh-keygen')
 
 ec2_client = boto3.client('ec2', aws_access_key_id=AWS_ACCESS_KEY, aws_secret_access_key=AWS_SECRET_KEY, region_name="us-east-1")
 
@@ -70,7 +72,7 @@ def production_instances():
         return None
 
 
-def validate_userdata(expected_userdata, current_user_data, instance_id):
+def validate_or_restore_expected_userdata(expected_userdata, current_user_data, instance_id):
     # if expected_userdata != current_user_data:
     if are_scripts_unequal(expected_userdata, current_user_data):
         # Modify the user data
@@ -197,17 +199,10 @@ def ssh_and_restart_container(public_ip, username='ec2-user', key_filename=ssh_k
 def restart_instance_and_container(instance_id, instance_state, public_ip):
     print(f'Instance {instance_id} is currently {instance_state} and has an ip address of {public_ip}')
 
-    current_user_data  = check_user_data(instance_id)
-
-    # Check if user data is different
-    # if expected_user_data != current_user_data:
-    #     # Modify the user data
-    #     new_base64_user_data = base64.b64encode(expected_user_data.encode('utf-8')).decode('utf-8')
-    #     ec2_client.modify_instance_attribute(
-    #         InstanceId=instance_id,
-    #         UserData={'Value': new_base64_user_data}
-    #     )
-    validate_userdata(expected_user_data, current_user_data, instance_id)
+    # grab userdata from existing AWS instance to compare
+    current_user_data = check_user_data(instance_id)
+    # Check if userdata is different and if it is not then replace it before restarting
+    validate_or_restore_expected_userdata(expected_user_data, current_user_data, instance_id)
 
     # Start the AWS instance
     ec2_client.start_instances(InstanceIds=[instance_id])
@@ -237,16 +232,10 @@ def restart_instance_and_container(instance_id, instance_state, public_ip):
 
 def restart_instances(instance_ids):
     for instance_id in instance_ids:
+        # grab userdata from existing AWS instance to compare
         current_user_data = check_user_data(instance_id)
-
-        # Check if user data is different
-        # if expected_user_data != current_user_data:
-        #     # Modify the user data
-        #     ec2_client.modify_instance_attribute(
-        #         InstanceId=instance_id,
-        #         UserData={'Value': expected_user_data}
-        #     )
-        validate_userdata(expected_user_data, current_user_data, instance_id)
+        # Check if userdata is different and if it is not then replace userdata on the instance being restarted
+        validate_or_restore_expected_userdata(expected_user_data, current_user_data, instance_id)
 
         # Start the AWS instance
         ec2_client.start_instances(InstanceIds=[instance_id])
@@ -331,7 +320,7 @@ def monitor_web_application():
 
 
 aws_info = production_instances()
-schedule.every(10).seconds.do(monitor_web_application)
+schedule.every(1).minute.do(monitor_web_application)
 
 while True:
     schedule.run_pending()
