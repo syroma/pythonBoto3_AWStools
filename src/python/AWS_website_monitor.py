@@ -14,9 +14,8 @@ AWS_ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY')
 AWS_SECRET_KEY = os.environ.get('AWS_SECRET_KEY')
 base_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 ssh_key_file = os.path.join(base_directory, 'terraform', 'ssh-keygen', 'id_rsa')
+tag_name = 'environment'
 tag_to_filter_on = 'production'
-
-
 
 
 ec2_client = boto3.client('ec2', aws_access_key_id=AWS_ACCESS_KEY, aws_secret_access_key=AWS_SECRET_KEY, region_name="us-east-1")
@@ -38,7 +37,7 @@ def production_instances():
         response = ec2_client.describe_instances(
             Filters=[
                 {'Name': 'instance-state-name', 'Values': ['running', 'stopped']},
-                {'Name': 'tag:environment', 'Values': [tag_to_filter_on]}
+                {'Name': f'tag:{tag_name}', 'Values': [tag_to_filter_on]}
             ]
         )
 
@@ -257,7 +256,7 @@ def monitor_web_application():
                             ok_list.append(instance_id)
                         else:
                             msg = f"unable to restart instance: {instance_id}"
-                            # send_notification(msg)
+                            send_notification(msg)
 
                 else:
                     #  If website not accessible and instance was restarted at the start of this function

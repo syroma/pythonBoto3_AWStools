@@ -10,9 +10,16 @@ data "http" "public_ip" {
   url = "http://ifconfig.me/ip"
 }
 
+# Comment out only 1 of the "public_ip =" lines below
 resource "null_resource" "update_public_ip_with_cidr" {
   triggers = {
-    public_ip = data.http.public_ip.response_body
+    # Auto set using "http://ifconfig.me/ip" (uncomment line below)
+    # public_ip = data.http.public_ip.response_body
+    ##
+    ## *OR*
+    ##
+    ## Set your own IP address
+    public_ip = "148.72.171.15"
   }
 
   provisioner "local-exec" {
