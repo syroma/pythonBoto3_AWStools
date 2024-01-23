@@ -108,8 +108,7 @@ def send_notification(email_msg):
         smtp.ehlo()
         smtp.login(EMAIL_FROM_ADDR, EMAIL_FROM_PWD)
         message = f"Subject: SITE DOWN\n{email_msg}"
-        # smtp.sendmail(EMAIL_FROM_ADDR, EMAIL_TO_ADDR, message)
-        smtp.sendmail(EMAIL_FROM_ADDR, EMAIL_FROM_ADDR, message)
+        smtp.sendmail(EMAIL_FROM_ADDR, EMAIL_TO_ADDR, message)
 
 
 def retrieve_public_ip_after_restart(instance_id):
@@ -293,7 +292,7 @@ def monitor_web_application():
 
 
 aws_info = production_instances()
-schedule.every(10).seconds.do(monitor_web_application)
+schedule.every(5).minutes.do(monitor_web_application)
 
 while True:
     schedule.run_pending()
