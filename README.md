@@ -47,7 +47,7 @@ To setup AWS instances using the included Terraform project, you need to:
 
 ## S3 Backend provider
 
-If you want to use the S3 backend provider you can modify line 13 in `/src/terraform/main.tf' to indicate your bucket name, else comment out lines 12-16:
+If you want to use the S3 backend provider you can modify line 13 in `/src/terraform/main.tf' to indicate your bucket name, else comment out lines 12-16 (the lines shown below):
 
 ```
   backend "s3" {
