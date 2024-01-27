@@ -45,11 +45,23 @@ To setup AWS instances using the included Terraform project, you need to:
    - terraform plan
    - terraform apply -auto-approve
 
+## S3 Backend provider
+
+If you want to use the S3 backend provider you can modify line 13 in `/src/terraform/main.tf' to indicate your bucket name, else comment out lines 12-16:
+
+```
+  backend "s3" {
+    bucket = "terraform-sy"
+    key    = "tf/terraform.tfstate"
+    region = "us-east-1"
+  }
+```
+
 ## Python
 
 The python monitor script can be run from `/src/python/AWS_website_monitor.py`
 
-### Schedule
+## Schedule
 
 By default, the script checks the website's availability every 5 minutes. You can modify this interval in `/src/python/AWS_website_monitor.py` on line 295 :\
 
@@ -57,7 +69,7 @@ By default, the script checks the website's availability every 5 minutes. You ca
 schedule.every(5).minutes.do(monitor_web_application)
 ```
 
-### Required Tags
+## Required Tags
 
 By default this python script monitors AWS instance websites with the tag "environment::produiction". To change these modify the variables on lines 17-18 in `/src/python/AWS_website_monitor.py`:
 
@@ -66,6 +78,6 @@ tag_name = 'environment'
 tag_to_filter_on = 'production'
 ```
 
-### Demo Website access
+## Demo Website access
 
 to access the default NGINX website created in the terraform package, use the public address and port 8080 like: http://54.163.21.67:8080/
